@@ -2,52 +2,128 @@ import mediapipe as mp
 import cv2
 import re
 
-mp_drawing = mp.solutions.drawing_utils
-mp_hands = mp.solutions.hands
-cap = cv2.VideoCapture(0)
-file = open('./Data/data', 'w')
-doWrite = True
-compareList = 0
-tolerance = 0.01
-results = 0
+tolerance = 69
+previous_coordinates = None
+
+"""
+*******************************************************************************
+Function in Order to Filter coordinates received
+[Removes all Symbols other then Numbers (positive and negative)]
+[Numbers with ' e^x ' which are smaller then ' ^-03 ' are set 0]
+Returns filtered coordinate String  21 x 3 coordinates  (x, y, z per joint)  
+*******************************************************************************
+"""
 
 
 def filterNumbers(toFilterObject):
+    # Puts a Regex on the List of coordinates to Filter useless information
     filteredList = re.findall(r'[-+]?(?:\.\d+|\d+(?:\.\d*)?)(?:[Ee][-+]?\d+)?', str(toFilterObject))
+    # Checks for Scientific Function  'e' in Number  --> if yes, sets the number to 0
     filteredList = [str(float(num) * 1000) if 'e' not in num.lower() else '0' for num in filteredList]
+    # Adds the filtered coordinate to the String
     filteredString = ",".join(filteredList)
+    # returns the finished String
     return filteredString
 
 
-with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5, max_num_hands=1) as hands:
-    while cap.isOpened():
-        compareList = results
-        ret, frame = cap.read()
-        if not ret:
-            break
+"""
+*******************************************************************************
+Function to check tolerance 
+*******************************************************************************
+"""
+def checkTolerance(new_coordinates):
+    global previous_coordinates
 
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = hands.process(image)
-        if doWrite:
+    if previous_coordinates is None:
+        previous_coordinates = new_coordinates
+        return False  # Since we don't have previous coordinates, we can't determine tolerance
+
+    # Split the previous and new coordinates into lists of floats
+    prev_coords = [float(num) for num in previous_coordinates.split(",")]
+    new_coords = [float(num) for num in new_coordinates.split(",")]
+
+    differences = []
+    for num1, num2, in zip(prev_coords, new_coords):
+        difference = num2 - num1
+        differences.append(difference)
+    for diff in differences:
+        if abs(diff) > tolerance:
+            return False
+    previous_coordinates = new_coordinates
+    print("true")
+    return True
+
+
+"""
+*******************************************************************************
+Main Script  --- HandDetectionMP (MP-Mediapipe) 
+[Detect Hands and draws Landmarks on them]
+[gets coordinates of joints]
+*******************************************************************************
+"""
+
+
+def HandDetectionMP():
+    # Gets needed utils as mp_drawing
+    mp_drawing = mp.solutions.drawing_utils
+    # Gets solution.hands as mp_hands
+    mp_hands = mp.solutions.hands
+    # opens a cv2 video-capture and assigns it to cap
+    cap = cv2.VideoCapture(0)
+    # opens the file where the coordinates are stored
+    file = open('./Data/data', 'w')
+    # toggleable bool variable to choose whether to write to file or not
+    doWrite = True
+
+    # sets up mp_hands with 1 max hand at a time and a 0.5 confidence as hands
+    with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5, max_num_hands=1) as hands:
+        while cap.isOpened():
+            # reads the captured frames from cap
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # image blue scaling
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # processes the captured image with mp_hands
+            results = hands.process(image)
+
+            if doWrite:
+                # checks if coordinates were captured
+                if results.multi_hand_landmarks:
+                    # filters the coordinates with filterNumbers function
+                    data = filterNumbers(results.multi_hand_landmarks)
+                    # writes filtered coordinates to file if tolerance returns true
+                    if checkTolerance(data):
+                        file.write(str(data))
+                        file.write(" /// ")
+
+            # converts image back to normal color
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             if results.multi_hand_landmarks:
-                data = filterNumbers(results.multi_hand_landmarks)
-                file.write(str(data))
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                mp_drawing.draw_landmarks(
-                    image,
-                    hand_landmarks,
-                    mp_hands.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=2),
-                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2),
-                )
+                for hand_landmarks in results.multi_hand_landmarks:
+                    # draws the landmarks on the shown image for each joint
+                    mp_drawing.draw_landmarks(
+                        image,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                        mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=2),
+                        mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2),
+                    )
+            # flips the image for easier use
+            flippedImage = cv2.flip(image, 1)
+            # shows the video capture with landmarks
+            cv2.imshow('Raw Webcam Feed', flippedImage)
+            # quits application on key "q"
+            if cv2.waitKey(10) & 0xFF == ord('q'):
+                break
+    # stops video record
+    cap.release()
+    # closes the data file
+    file.close()
+    # clears all cv2 windows
+    cv2.destroyAllWindows()
 
-        flippedImage = cv2.flip(image, 1)
-        cv2.imshow('Raw Webcam Feed', flippedImage)
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
 
-cap.release()
-file.close()
-cv2.destroyAllWindows()
+# Runs main script
+HandDetectionMP()
