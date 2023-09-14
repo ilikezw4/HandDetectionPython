@@ -1,9 +1,7 @@
 import mediapipe as mp
 import cv2
 import re
-
-tolerance = 69
-previous_coordinates = None
+import numpy as np
 
 """
 *******************************************************************************
@@ -28,30 +26,13 @@ def filterNumbers(toFilterObject):
 
 """
 *******************************************************************************
-Function to check tolerance 
+Function to calc average coords
 *******************************************************************************
 """
-def checkTolerance(new_coordinates):
-    global previous_coordinates
 
-    if previous_coordinates is None:
-        previous_coordinates = new_coordinates
-        return False  # Since we don't have previous coordinates, we can't determine tolerance
 
-    # Split the previous and new coordinates into lists of floats
-    prev_coords = [float(num) for num in previous_coordinates.split(",")]
-    new_coords = [float(num) for num in new_coordinates.split(",")]
-
-    differences = []
-    for num1, num2, in zip(prev_coords, new_coords):
-        difference = num2 - num1
-        differences.append(difference)
-    for diff in differences:
-        if abs(diff) > tolerance:
-            return False
-    previous_coordinates = new_coordinates
-    print("true")
-    return True
+def calculateAverage(points):
+    return np.mean(points, axis=0)
 
 
 """
@@ -74,6 +55,10 @@ def HandDetectionMP():
     file = open('./Data/data', 'w')
     # toggleable bool variable to choose whether to write to file or not
     doWrite = True
+    # threshold value
+    movement_threshold = 0.1
+    # list for saving previous coordinates
+    previous_hand_positions = []
 
     # sets up mp_hands with 1 max hand at a time and a 0.5 confidence as hands
     with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5, max_num_hands=1) as hands:
@@ -91,12 +76,22 @@ def HandDetectionMP():
             if doWrite:
                 # checks if coordinates were captured
                 if results.multi_hand_landmarks:
-                    # filters the coordinates with filterNumbers function
-                    data = filterNumbers(results.multi_hand_landmarks)
-                    # writes filtered coordinates to file if tolerance returns true
-                    if checkTolerance(data):
-                        file.write(str(data))
-                        file.write(" /// ")
+
+                    hand_landmarks = results.multi_hand_landmarks[0].landmark
+                    hand_positions = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks])
+                    previous_hand_positions.append(hand_positions)
+                    max_positions = 24
+                    if len(previous_hand_positions) > max_positions:
+                        previous_hand_positions.pop(0)
+                    if len(previous_hand_positions) == max_positions:
+                        average_hand_position = calculateAverage(previous_hand_positions)
+                        differnce = np.linalg.norm(hand_positions - average_hand_position)
+                        if differnce < movement_threshold:
+                            data = filterNumbers(results.multi_hand_landmarks)
+                            file.write(str(data))
+                            file.write(" /// ")
+                        else:
+                            print("hand moving")
 
             # converts image back to normal color
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
