@@ -56,7 +56,7 @@ def HandDetectionMP():
     # toggleable bool variable to choose whether to write to file or not
     doWrite = True
     # threshold value
-    movement_threshold = 0.1
+    movement_threshold = 0.08
     # list for saving previous coordinates
     previous_hand_positions = []
 
@@ -73,25 +73,24 @@ def HandDetectionMP():
             # processes the captured image with mp_hands
             results = hands.process(image)
 
-            if doWrite:
-                # checks if coordinates were captured
-                if results.multi_hand_landmarks:
-
-                    hand_landmarks = results.multi_hand_landmarks[0].landmark
-                    hand_positions = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks])
-                    previous_hand_positions.append(hand_positions)
-                    max_positions = 24
-                    if len(previous_hand_positions) > max_positions:
-                        previous_hand_positions.pop(0)
-                    if len(previous_hand_positions) == max_positions:
-                        average_hand_position = calculateAverage(previous_hand_positions)
-                        differnce = np.linalg.norm(hand_positions - average_hand_position)
-                        if differnce < movement_threshold:
-                            data = filterNumbers(results.multi_hand_landmarks)
-                            file.write(str(data))
-                            file.write(" /// ")
-                        else:
-                            print("hand moving")
+            # checks if coordinates were captured
+            if results.multi_hand_landmarks:
+                hand_landmarks = results.multi_hand_landmarks[0].landmark
+                hand_positions = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks])
+                previous_hand_positions.append(hand_positions)
+                max_positions = 24
+                if len(previous_hand_positions) > max_positions:
+                    previous_hand_positions.pop(0)
+                if len(previous_hand_positions) == max_positions:
+                    average_hand_position = calculateAverage(previous_hand_positions)
+                    difference = np.linalg.norm(hand_positions - average_hand_position)
+                    if difference < movement_threshold and doWrite:
+                        print("capture")
+                        data = filterNumbers(results.multi_hand_landmarks)
+                        file.write(str(data))
+                        file.write(" /// ")
+                    # else:
+                    # print("hand moving")
 
             # converts image back to normal color
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -112,6 +111,7 @@ def HandDetectionMP():
             # quits application on key "q"
             if cv2.waitKey(10) & 0xFF == ord('q'):
                 break
+
     # stops video record
     cap.release()
     # closes the data file
