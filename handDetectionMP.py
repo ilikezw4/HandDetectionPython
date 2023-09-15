@@ -78,7 +78,7 @@ def HandDetectionMP():
                 hand_landmarks = results.multi_hand_landmarks[0].landmark
                 hand_positions = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks])
                 previous_hand_positions.append(hand_positions)
-                max_positions = 24
+                max_positions = 15
                 if len(previous_hand_positions) > max_positions:
                     previous_hand_positions.pop(0)
                 if len(previous_hand_positions) == max_positions:
@@ -89,8 +89,7 @@ def HandDetectionMP():
                         data = filterNumbers(results.multi_hand_landmarks)
                         file.write(str(data))
                         file.write(" /// ")
-                    # else:
-                    # print("hand moving")
+                        break
 
             # converts image back to normal color
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
