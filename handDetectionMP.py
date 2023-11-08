@@ -63,7 +63,7 @@ def hand_detection_mp():
     with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5, max_num_hands=1) as hands:
         cap = cv2.VideoCapture(0)
 
-        with open('./Data/data', 'w') as file:
+        with open('./Data/Datasets/Fast/Z', 'w') as file:
             previous_hand_positions = deque(maxlen=MAX_POSITIONS)
 
             while cap.isOpened():
